@@ -6,7 +6,15 @@ COPY requirements.txt /app/
 
 RUN python -m pip install -r /app/requirements.txt
 
+COPY /static/ /app/
+
+COPY /templates/ /app/
+
 COPY models.py /app/
+
+COPY database.py /app/
+
+COPY schemas.py /app/
 
 COPY main.py /app/
 

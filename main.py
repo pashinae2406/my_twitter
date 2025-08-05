@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends, Header, HTTPException, Response
+from fastapi.security import APIKeyQuery, APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
@@ -9,7 +10,7 @@ from sqlalchemy.orm import selectinload
 import models
 import schemas
 from database import engine, session, async_session
-from typing import List
+from typing import List, Annotated
 from pathlib import Path
 
 
@@ -47,23 +48,39 @@ async def users() -> List[models.User]:
     res = await session.execute(select(models.User))
     return res.scalars().all()
 
-@app.get('/api/users/me')
-async def user_me():
+@app.get('/api/users/me', response_model=schemas.UserOut)
+async def user_me(api_key: str = Header()):
+    """Ендпоинт для получения информации о своем профиле"""
+
+    header_dict: dict = {'Api-Key': api_key}
     async with session.begin():
-        res = await session.execute(select(models.User).where(models.User.id == 1))
-        user = res.scalar()
+        res_user = await session.execute(select(models.User).where(models.User.api_key == header_dict['Api-Key']))
+        user = res_user.scalar()
+        res_follower = await session.execute(select(models.Followers.follower_id).where(models.Followers.user_id == user.id))
+        followers: list = []
+        for fol in res_follower.scalars().all():
+            res_name = await session.execute(select(models.User.name).where(models.User.id == fol))
+            name: str = res_name.scalar()
+            followers.append({"id": fol, "name": name})
+        res_following = await session.execute(select(models.Followings.following_id).where(models.Followings.user_id == user.id))
+        followings: list = []
+        for fol in res_following.scalars().all():
+            res_name = await session.execute(select(models.User.name).where(models.User.id == fol))
+            name: str = res_name.scalar()
+            followings.append({"id": fol, "name": name})
         return JSONResponse(
             {
                 "result": True,
                 "user": {
                     "id": user.id,
                     "name": user.name,
-                    "followers": [],
-                    "following": [],
+                    "followers": followers,
+                    "following": followings,
                 }
             }
         )
 
+
 @app.get('/login')
-def login():
+def login(api_key: str = Header()):
     pass
